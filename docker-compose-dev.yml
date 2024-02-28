@@ -1,0 +1,58 @@
+version: "3.9"
+volumes:
+  mongo_data_dev:
+
+
+services:
+  frontend:
+    restart: always
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - 3000:3000
+    environment:
+      - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:4000/}
+    volumes:
+      - ./frontend:/app/frontend
+      - /app/frontend/node_modules
+
+  mongo:
+    image: mongo:6.0
+    restart: always
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME:-devuser}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD:-somepass}
+      - MONGO_INITDB_DATABASE=${MONGO_DBNAME:-TodoDB}
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh mongodb://mongo/test --quiet
+      interval: 2s
+      timeout: 2s
+      retries: 10
+      start_period: 2s
+    volumes:
+      - mongo_data_dev:/data/db
+
+  nodejs:
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: always
+    build:
+      context: ./backend/nodejs
+      dockerfile: Dockerfile.dev
+    volumes:
+      - /app/nodejs/node_modules
+      - /app/nodejs/dist
+      - ./backend/nodejs:/app/nodejs
+    environment:
+      - MONGODB_URL=mongodb://mongo/
+      - MONGODB_USER=${MONGO_USERNAME:-devuser}
+      - MONGODB_PASS=${MONGO_PASSWORD:-somepass}
+      - MONGODB_DBNAME=${MONGO_DBNAME:-TodoDB}
+      - JWT_SECRET=${JWT_SECRET:-jwtsecret}
+      - NODE_ENV=development
+      - PORT=4000
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+    ports:
+      - 4000:4000
